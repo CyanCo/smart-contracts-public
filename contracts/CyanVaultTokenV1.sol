@@ -10,10 +10,8 @@ contract CyanVaultTokenV1 is AccessControl, ERC20 {
     constructor(
         string memory name,
         string memory symbol,
-        uint256 initialSupply,
         address cyanSuperAdmin
     ) ERC20(name, symbol) {
-        _mint(cyanSuperAdmin, initialSupply);
         _setupRole(DEFAULT_ADMIN_ROLE, cyanSuperAdmin);
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }

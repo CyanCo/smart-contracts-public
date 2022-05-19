@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.13;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 import "./CyanVaultTokenV1.sol";
 import "./IStableSwapSTETH.sol";
 
-contract CyanVaultV1 is AccessControl, ReentrancyGuard, ERC721Holder, Pausable {
+contract CyanVaultV1 is
+    Initializable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
+    ERC721HolderUpgradeable,
+    PausableUpgradeable
+{
     bytes32 public constant CYAN_ROLE = keccak256("CYAN_ROLE");
     bytes32 public constant CYAN_PAYMENT_PLAN_ROLE =
         keccak256("CYAN_PAYMENT_PLAN_ROLE");
@@ -43,11 +50,11 @@ contract CyanVaultV1 is AccessControl, ReentrancyGuard, ERC721Holder, Pausable {
     event ExchangedStEthToEth(uint256 stEthAmount, uint256 receivedEthAmount);
     event ReceivedETH(uint256 amount, address indexed from);
 
-    address public immutable _cyanVaultTokenAddress;
-    CyanVaultTokenV1 private immutable _cyanVaultTokenContract;
+    address public _cyanVaultTokenAddress;
+    CyanVaultTokenV1 private _cyanVaultTokenContract;
 
-    IERC20 private immutable _stEthTokenContract;
-    IStableSwapSTETH private immutable _stableSwapSTETHContract;
+    IERC20 private _stEthTokenContract;
+    IStableSwapSTETH private _stableSwapSTETHContract;
 
     // Safety fund percent. (x100)
     uint256 public _safetyFundPercent;
@@ -67,7 +74,7 @@ contract CyanVaultV1 is AccessControl, ReentrancyGuard, ERC721Holder, Pausable {
     // Cyan collected service fee
     uint256 private COLLECTED_SERVICE_FEE_AMOUNT;
 
-    constructor(
+    function initialize(
         address cyanVaultTokenAddress,
         address cyanPaymentPlanAddress,
         address stEthTokenAddress,
@@ -75,7 +82,12 @@ contract CyanVaultV1 is AccessControl, ReentrancyGuard, ERC721Holder, Pausable {
         address cyanSuperAdmin,
         uint256 safetyFundPercent,
         uint256 serviceFeePercent
-    ) payable {
+    ) public initializer {
+        __AccessControl_init();
+        __ReentrancyGuard_init();
+        __ERC721Holder_init();
+        __Pausable_init();
+
         _cyanVaultTokenAddress = cyanVaultTokenAddress;
         _cyanVaultTokenContract = CyanVaultTokenV1(_cyanVaultTokenAddress);
         _safetyFundPercent = safetyFundPercent;
@@ -83,7 +95,7 @@ contract CyanVaultV1 is AccessControl, ReentrancyGuard, ERC721Holder, Pausable {
 
         LOANED_AMOUNT = 0;
         DEFAULTED_NFT_ASSET_AMOUNT = 0;
-        REMAINING_AMOUNT = msg.value;
+        REMAINING_AMOUNT = 0;
 
         _stEthTokenContract = IERC20(stEthTokenAddress);
         _stableSwapSTETHContract = IStableSwapSTETH(
@@ -277,11 +289,13 @@ contract CyanVaultV1 is AccessControl, ReentrancyGuard, ERC721Holder, Pausable {
 
     function calculateTokenByETH(uint256 amount) public view returns (uint256) {
         (uint256 totalETH, uint256 totalToken) = getTotalEthAndToken();
+        if (totalETH == 0) return amount;
         return (amount * totalToken) / totalETH;
     }
 
     function calculateETHByToken(uint256 amount) public view returns (uint256) {
         (uint256 totalETH, uint256 totalToken) = getTotalEthAndToken();
+        if (totalToken == 0) return amount;
         return (amount * totalETH) / totalToken;
     }
 
