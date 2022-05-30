@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract CyanWrappedNFTV1 is
     AccessControl,
@@ -14,6 +15,7 @@ contract CyanWrappedNFTV1 is
     ERC721Holder
 {
     using Strings for uint256;
+    using SafeERC20 for IERC20;
 
     bytes32 public constant CYAN_ROLE = keccak256("CYAN_ROLE");
     bytes32 public constant CYAN_PAYMENT_PLAN_ROLE =
@@ -22,9 +24,9 @@ contract CyanWrappedNFTV1 is
     string private baseURI;
     string private baseExtension;
 
-    address private immutable _originalNFT;
-    address private _cyanVaultAddress;
-    ERC721 private immutable _originalNFTContract;
+    address private immutable originalNFT;
+    address private cyanVaultAddress;
+    ERC721 private immutable originalNFTContract;
 
     event Wrap(
         address indexed from,
@@ -36,20 +38,35 @@ contract CyanWrappedNFTV1 is
         uint256 indexed tokenId,
         bool indexed isDefaulted
     );
+    event WithdrewERC20(address indexed token, address to, uint256 amount);
+    event WithdrewERC721(
+        address indexed collection,
+        address to,
+        uint256 indexed tokenId
+    );
 
     constructor(
-        address originalNFT,
-        address cyanVaultAddress,
+        address _originalNFT,
+        address _cyanVaultAddress,
         address cyanPaymentPlanContractAddress,
         address cyanSuperAdmin,
-        string memory name,
-        string memory symbol,
+        string memory _name,
+        string memory _symbol,
         string memory uri,
         string memory extension
-    ) ERC721(name, symbol) {
-        _originalNFT = originalNFT;
-        _cyanVaultAddress = cyanVaultAddress;
-        _originalNFTContract = ERC721(_originalNFT);
+    ) ERC721(_name, _symbol) {
+        require(
+            _originalNFT != address(0),
+            "Original NFT address cannot be zero"
+        );
+        require(
+            _cyanVaultAddress != address(0),
+            "Cyan Vault address cannot be zero"
+        );
+
+        originalNFT = _originalNFT;
+        cyanVaultAddress = _cyanVaultAddress;
+        originalNFTContract = ERC721(_originalNFT);
 
         baseURI = uri;
         baseExtension = extension;
@@ -67,8 +84,8 @@ contract CyanWrappedNFTV1 is
         require(to != address(0), "Wrap to the zero address");
         require(!_exists(tokenId), "Token already wrapped");
 
+        originalNFTContract.safeTransferFrom(from, address(this), tokenId);
         _safeMint(to, tokenId);
-        _originalNFTContract.safeTransferFrom(from, address(this), tokenId);
 
         emit Wrap(from, to, tokenId);
     }
@@ -82,13 +99,13 @@ contract CyanWrappedNFTV1 is
 
         address to;
         if (isDefaulted) {
-            to = _cyanVaultAddress;
+            to = cyanVaultAddress;
         } else {
             to = ownerOf(tokenId);
         }
 
         _burn(tokenId);
-        _originalNFTContract.safeTransferFrom(address(this), to, tokenId);
+        originalNFTContract.safeTransferFrom(address(this), to, tokenId);
 
         emit Unwrap(to, tokenId, isDefaulted);
     }
@@ -98,19 +115,19 @@ contract CyanWrappedNFTV1 is
     }
 
     function getOriginalNFTAddress() external view returns (address) {
-        return _originalNFT;
+        return originalNFT;
     }
 
     function getCyanVaultAddress() external view returns (address) {
-        return _cyanVaultAddress;
+        return cyanVaultAddress;
     }
 
-    function updateCyanVaultAddress(address cyanVaultAddress)
+    function updateCyanVaultAddress(address _cyanVaultAddress)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        require(cyanVaultAddress != address(0), "Zero Cyan Vault address");
-        _cyanVaultAddress = cyanVaultAddress;
+        require(_cyanVaultAddress != address(0), "Zero Cyan Vault address");
+        cyanVaultAddress = _cyanVaultAddress;
     }
 
     function _baseURI() internal view override returns (string memory) {
@@ -141,6 +158,8 @@ contract CyanWrappedNFTV1 is
         override
         returns (string memory)
     {
+        require(_exists(tokenId), "Wrapped token does not exist");
+
         string memory uri = _baseURI();
         if (bytes(uri).length > 0) {
             string memory extension = _baseExtension();
@@ -166,11 +185,13 @@ contract CyanWrappedNFTV1 is
             "Cannot withdraw own wrapped token"
         );
         require(
-            contractAddress != _originalNFT,
+            contractAddress != originalNFT,
             "Cannot withdraw original NFT of the wrapper contract"
         );
         ERC721 erc721Contract = ERC721(contractAddress);
         erc721Contract.safeTransferFrom(address(this), msg.sender, tokenId);
+
+        emit WithdrewERC721(contractAddress, msg.sender, tokenId);
     }
 
     function withdrawAirDroppedERC20(address contractAddress, uint256 amount)
@@ -184,6 +205,8 @@ contract CyanWrappedNFTV1 is
             "ERC20 balance not enough"
         );
         erc20Contract.transfer(msg.sender, amount);
+
+        emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
 
     function withdrawApprovedERC20(
@@ -197,6 +220,8 @@ contract CyanWrappedNFTV1 is
             "ERC20 allowance not enough"
         );
         erc20Contract.transferFrom(from, msg.sender, amount);
+
+        emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
 
     function supportsInterface(bytes4 interfaceId)

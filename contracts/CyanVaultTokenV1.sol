@@ -8,10 +8,10 @@ contract CyanVaultTokenV1 is AccessControl, ERC20 {
     bytes32 public constant CYAN_VAULT_ROLE = keccak256("CYAN_VAULT_ROLE");
 
     constructor(
-        string memory name,
-        string memory symbol,
+        string memory _name,
+        string memory _symbol,
         address cyanSuperAdmin
-    ) ERC20(name, symbol) {
+    ) ERC20(_name, _symbol) {
         _setupRole(DEFAULT_ADMIN_ROLE, cyanSuperAdmin);
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }

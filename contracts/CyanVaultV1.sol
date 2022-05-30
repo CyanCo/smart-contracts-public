@@ -7,17 +7,19 @@ import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 import "./CyanVaultTokenV1.sol";
 import "./IStableSwapSTETH.sol";
 
 contract CyanVaultV1 is
-    Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     ERC721HolderUpgradeable,
     PausableUpgradeable
 {
+    using SafeERC20Upgradeable for IERC20;
+
     bytes32 public constant CYAN_ROLE = keccak256("CYAN_ROLE");
     bytes32 public constant CYAN_PAYMENT_PLAN_ROLE =
         keccak256("CYAN_PAYMENT_PLAN_ROLE");
@@ -46,9 +48,13 @@ contract CyanVaultV1 is
     event UpdatedDefaultedNFTAssetAmount(uint256 amount);
     event UpdatedServiceFeePercent(uint256 from, uint256 to);
     event UpdatedSafetyFundPercent(uint256 from, uint256 to);
+    event InitializedServiceFeePercent(uint256 to);
+    event InitializedSafetyFundPercent(uint256 to);
     event ExchangedEthToStEth(uint256 ethAmount, uint256 receivedStEthAmount);
     event ExchangedStEthToEth(uint256 stEthAmount, uint256 receivedEthAmount);
     event ReceivedETH(uint256 amount, address indexed from);
+    event WithdrewERC20(address indexed token, address to, uint256 amount);
+    event CollectedServiceFee(uint256 collectedAmount, uint256 remainingAmount);
 
     address public _cyanVaultTokenAddress;
     CyanVaultTokenV1 private _cyanVaultTokenContract;
@@ -82,7 +88,20 @@ contract CyanVaultV1 is
         address cyanSuperAdmin,
         uint256 safetyFundPercent,
         uint256 serviceFeePercent
-    ) public initializer {
+    ) external initializer {
+        require(
+            cyanVaultTokenAddress != address(0),
+            "Cyan Vault Token address cannot be zero"
+        );
+        require(
+            safetyFundPercent <= 10000,
+            "Safety fund percent must be equal or less than 100 percent"
+        );
+        require(
+            serviceFeePercent <= 200,
+            "Service fee percent must not be greater than 2 percent"
+        );
+
         __AccessControl_init();
         __ReentrancyGuard_init();
         __ERC721Holder_init();
@@ -105,6 +124,9 @@ contract CyanVaultV1 is
         _setupRole(DEFAULT_ADMIN_ROLE, cyanSuperAdmin);
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(CYAN_PAYMENT_PLAN_ROLE, cyanPaymentPlanAddress);
+
+        emit InitializedServiceFeePercent(serviceFeePercent);
+        emit InitializedSafetyFundPercent(safetyFundPercent);
     }
 
     // User stakes ETH
@@ -131,6 +153,8 @@ contract CyanVaultV1 is
         whenNotPaused
         onlyRole(CYAN_PAYMENT_PLAN_ROLE)
     {
+        require(to != address(0), "to address cannot be zero");
+
         uint256 maxWithdrableAmount = getMaxWithdrawableAmount();
         require(amount <= maxWithdrableAmount, "Not enough ETH in the Vault");
 
@@ -235,7 +259,7 @@ contract CyanVaultV1 is
 
         require(
             originalContract.ownerOf(tokenId) == address(this),
-            "Vault isn't owner of the token"
+            "Vault is not the owner of the token"
         );
 
         originalContract.safeTransferFrom(address(this), msg.sender, tokenId);
@@ -328,10 +352,10 @@ contract CyanVaultV1 is
             "Cannot exchange more than REMAINING_AMOUNT"
         );
         // Exchanging ETH to stETH
+        REMAINING_AMOUNT -= ethAmount;
         uint256 receivedStEthAmount = _stableSwapSTETHContract.exchange{
             value: ethAmount
         }(0, 1, ethAmount, minStEthAmount);
-        REMAINING_AMOUNT -= ethAmount;
         emit ExchangedEthToStEth(ethAmount, receivedStEthAmount);
     }
 
@@ -342,9 +366,13 @@ contract CyanVaultV1 is
     {
         require(stEthAmount > 0, "Exchanging stETH amount is zero");
         // Exchanging stETH to ETH
-        _stEthTokenContract.approve(
+        bool isApproved = _stEthTokenContract.approve(
             address(_stableSwapSTETHContract),
             stEthAmount
+        );
+        require(
+            isApproved,
+            "stETH approval to stableSwapSTETH contract failed"
         );
         uint256 receivedEthAmount = _stableSwapSTETHContract.exchange(
             1,
@@ -392,6 +420,8 @@ contract CyanVaultV1 is
         );
         COLLECTED_SERVICE_FEE_AMOUNT -= amount;
         payable(msg.sender).transfer(amount);
+
+        emit CollectedServiceFee(amount, COLLECTED_SERVICE_FEE_AMOUNT);
     }
 
     function withdrawAirDroppedERC20(address contractAddress, uint256 amount)
@@ -409,6 +439,8 @@ contract CyanVaultV1 is
             "ERC20 balance not enough"
         );
         erc20Contract.transfer(msg.sender, amount);
+
+        emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
 
     function withdrawApprovedERC20(
@@ -426,6 +458,8 @@ contract CyanVaultV1 is
             "ERC20 allowance not enough"
         );
         erc20Contract.transferFrom(from, msg.sender, amount);
+
+        emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
 
     receive() external payable {

@@ -77,6 +77,8 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
     mapping(address => mapping(uint256 => PaymentPlan)) public _paymentPlan;
 
     constructor(address cyanSigner, address cyanSuperAdmin) {
+        require(cyanSigner != address(0), "Cyan signer address cannot be zero");
+
         _claimableServiceFee = 0;
         _cyanSigner = cyanSigner;
         _setupRole(DEFAULT_ADMIN_ROLE, cyanSuperAdmin);
@@ -134,7 +136,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
 
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
         require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
+            !_cyanWrappedNFTV1.exists(wNFTTokenId),
             "Token is already wrapped"
         );
 
@@ -184,10 +186,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
             "BNPL payment plan must be at CREATED stage"
         );
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
-        require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
-            "Wrapped token exist"
-        );
+        require(!_cyanWrappedNFTV1.exists(wNFTTokenId), "Wrapped token exist");
 
         _paymentPlan[wNFTContract][wNFTTokenId].status = PaymentPlanStatus
             .BNPL_FUNDED;
@@ -226,10 +225,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
             "BNPL payment plan must be at FUNDED stage"
         );
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
-        require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
-            "Wrapped token exist"
-        );
+        require(!_cyanWrappedNFTV1.exists(wNFTTokenId), "Wrapped token exist");
 
         (
             uint256 payAmountForCollateral,
@@ -239,14 +235,14 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
 
         ) = getNextPayment(wNFTContract, wNFTTokenId);
 
+        _paymentPlan[wNFTContract][wNFTTokenId].status = PaymentPlanStatus
+            .BNPL_ACTIVE;
+
         _cyanWrappedNFTV1.wrap(
             msg.sender,
             _paymentPlan[wNFTContract][wNFTTokenId].createdUserAddress,
             wNFTTokenId
         );
-
-        _paymentPlan[wNFTContract][wNFTTokenId].status = PaymentPlanStatus
-            .BNPL_ACTIVE;
 
         _claimableServiceFee += payAmountForService;
 
@@ -284,10 +280,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
             "BNPL payment plan must be at CREATED stage"
         );
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
-        require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
-            "Wrapped token exist"
-        );
+        require(!_cyanWrappedNFTV1.exists(wNFTTokenId), "Wrapped token exist");
 
         (
             uint256 payAmountForCollateral,
@@ -297,14 +290,14 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
 
         ) = getNextPayment(wNFTContract, wNFTTokenId);
 
+        _paymentPlan[wNFTContract][wNFTTokenId].status = PaymentPlanStatus
+            .BNPL_ACTIVE;
+
         _cyanWrappedNFTV1.wrap(
             msg.sender,
             _paymentPlan[wNFTContract][wNFTTokenId].createdUserAddress,
             wNFTTokenId
         );
-
-        _paymentPlan[wNFTContract][wNFTTokenId].status = PaymentPlanStatus
-            .BNPL_ACTIVE;
 
         _claimableServiceFee += payAmountForService;
 
@@ -373,7 +366,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
 
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
         require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
+            !_cyanWrappedNFTV1.exists(wNFTTokenId),
             "Token is already wrapped"
         );
 
@@ -439,8 +432,8 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
 
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
         require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == true,
-            "Wrapped token doesn't exist"
+            _cyanWrappedNFTV1.exists(wNFTTokenId),
+            "Wrapped token does not exist"
         );
         address lastOwner = _cyanWrappedNFTV1.ownerOf(wNFTTokenId);
         _cyanWrappedNFTV1.unwrap(
@@ -503,8 +496,8 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
         require(dueDate >= block.timestamp, "Payment due date is passed");
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
         require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == true,
-            "Wrapped token doesn't exist"
+            _cyanWrappedNFTV1.exists(wNFTTokenId),
+            "Wrapped token does not exist"
         );
         _paymentPlan[wNFTContract][wNFTTokenId].counterPaidPayments++;
         _claimableServiceFee += payAmountForService;
@@ -562,10 +555,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
             "BNPL payment plan must be at CREATED stage"
         );
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
-        require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
-            "Wrapped token exists"
-        );
+        require(!_cyanWrappedNFTV1.exists(wNFTTokenId), "Wrapped token exists");
 
         (, , , uint256 currentPayment, ) = getNextPayment(
             wNFTContract,
@@ -607,10 +597,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
             "Wrong fund return amount"
         );
         CyanWrappedNFTV1 _cyanWrappedNFTV1 = CyanWrappedNFTV1(wNFTContract);
-        require(
-            _cyanWrappedNFTV1.exists(wNFTTokenId) == false,
-            "Wrapped token exists"
-        );
+        require(!_cyanWrappedNFTV1.exists(wNFTTokenId), "Wrapped token exists");
 
         (, , , uint256 currentPayment, ) = getNextPayment(
             wNFTContract,
@@ -826,7 +813,7 @@ contract CyanPaymentPlanV1 is AccessControl, ReentrancyGuard {
         (, , , , uint256 dueDate) = getNextPayment(wNFTContract, wNFTTokenId);
         bool isDefaulted = block.timestamp > dueDate;
 
-        if (isDefaulted == true) {
+        if (isDefaulted) {
             if (
                 _paymentPlan[wNFTContract][wNFTTokenId].status ==
                 PaymentPlanStatus.PAWN_ACTIVE
