@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract CyanVaultTokenV1 is AccessControl, ERC20 {
     bytes32 public constant CYAN_VAULT_ROLE = keccak256("CYAN_VAULT_ROLE");
+    event BurnedAdminToken(uint256 amount);
 
     constructor(
         string memory _name,
@@ -38,5 +39,7 @@ contract CyanVaultTokenV1 is AccessControl, ERC20 {
     {
         require(balanceOf(msg.sender) >= amount, "Balance not enough");
         _burn(msg.sender, amount);
+
+        emit BurnedAdminToken(amount);
     }
 }

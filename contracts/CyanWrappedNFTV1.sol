@@ -204,7 +204,7 @@ contract CyanWrappedNFTV1 is
             erc20Contract.balanceOf(address(this)) >= amount,
             "ERC20 balance not enough"
         );
-        erc20Contract.transfer(msg.sender, amount);
+        erc20Contract.safeTransfer(msg.sender, amount);
 
         emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
@@ -219,7 +219,7 @@ contract CyanWrappedNFTV1 is
             erc20Contract.allowance(from, address(this)) >= amount,
             "ERC20 allowance not enough"
         );
-        erc20Contract.transferFrom(from, msg.sender, amount);
+        erc20Contract.safeTransferFrom(from, msg.sender, amount);
 
         emit WithdrewERC20(contractAddress, msg.sender, amount);
     }

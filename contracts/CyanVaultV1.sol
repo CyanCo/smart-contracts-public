@@ -8,6 +8,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgra
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
 import "./CyanVaultTokenV1.sol";
 import "./IStableSwapSTETH.sol";
@@ -18,7 +19,7 @@ contract CyanVaultV1 is
     ERC721HolderUpgradeable,
     PausableUpgradeable
 {
-    using SafeERC20Upgradeable for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     bytes32 public constant CYAN_ROLE = keccak256("CYAN_ROLE");
     bytes32 public constant CYAN_PAYMENT_PLAN_ROLE =
@@ -433,12 +434,12 @@ contract CyanVaultV1 is
             contractAddress != address(_stEthTokenContract),
             "Cannot withdraw stETH"
         );
-        IERC20 erc20Contract = IERC20(contractAddress);
+        IERC20Upgradeable erc20Contract = IERC20Upgradeable(contractAddress);
         require(
             erc20Contract.balanceOf(address(this)) >= amount,
             "ERC20 balance not enough"
         );
-        erc20Contract.transfer(msg.sender, amount);
+        erc20Contract.safeTransfer(msg.sender, amount);
 
         emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
@@ -452,12 +453,12 @@ contract CyanVaultV1 is
             contractAddress != address(_stEthTokenContract),
             "Cannot withdraw stETH"
         );
-        IERC20 erc20Contract = IERC20(contractAddress);
+        IERC20Upgradeable erc20Contract = IERC20Upgradeable(contractAddress);
         require(
             erc20Contract.allowance(from, address(this)) >= amount,
             "ERC20 allowance not enough"
         );
-        erc20Contract.transferFrom(from, msg.sender, amount);
+        erc20Contract.safeTransferFrom(from, msg.sender, amount);
 
         emit WithdrewERC20(contractAddress, msg.sender, amount);
     }
